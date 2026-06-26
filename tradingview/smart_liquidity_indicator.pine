@@ -1,0 +1,180 @@
+//@version=6
+indicator("Smart Liquidity AI SMC Engine (v6)", overlay=true, max_boxes_count=500, max_lines_count=500)
+
+// --- INPUTS ---
+swingLen = input.int(5, "Swing Pivot Lookback/Lookforward Length")
+fvgMinRatio = input.float(0.1, "Min FVG Size relative to ATR", step=0.05)
+emaFastLen = input.int(50, "Trend Fast EMA Length")
+emaSlowLen = input.int(200, "Trend Slow EMA Length")
+volAtrLen = input.int(20, "Volume/ATR Average Length")
+webhookUrl = input.string("http://127.0.0.1:8000/api/signals", "Webhook URL Placeholder")
+
+// --- COLOR PALETTE ---
+colorBullish = color.new(#10b981, 0)
+colorBearish = color.new(#ef4444, 0)
+colorBullishLight = color.new(#10b981, 80)
+colorBearishLight = color.new(#ef4444, 80)
+colorNeutral = color.new(#94a3b8, 0)
+
+// --- MARKET CONTEXT (ATR & VOL & EMA TREND) ---
+atrVal = ta.atr(volAtrLen)
+avgVol = ta.ema(volume, volAtrLen)
+avgBody = ta.ema(math.abs(close - open), volAtrLen)
+
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+trendState = emaFast > emaSlow ? "Bullish" : (emaFast < emaSlow ? "Bearish" : "Neutral")
+
+// Trading Session Identification (UTC Timebase)
+inAsian = not na(time(timeframe.period, "0000-0800:1234567"))
+inLondon = not na(time(timeframe.period, "0800-1600:1234567"))
+inNY = not na(time(timeframe.period, "1300-2100:1234567"))
+sessionName = inNY ? "New York" : (inLondon ? "London" : "Asian")
+
+// --- SWING PIVOTS ---
+pHigh = ta.pivothigh(high, swingLen, swingLen)
+pLow = ta.pivotlow(low, swingLen, swingLen)
+
+// Persistent state arrays to track un-swept levels
+var float[] activeHighs = array.new_float()
+var float[] activeLows = array.new_float()
+
+if not na(pHigh)
+    array.push(activeHighs, pHigh)
+if not na(pLow)
+    array.push(activeLows, pLow)
+
+// Draw Swing Points
+plotshape(pHigh, title="Swing High", style=shape.triangledown, location=location.abovebar, color=colorBearish, size=size.tiny, offset=-swingLen)
+plotshape(pLow, title="Swing Low", style=shape.triangleup, location=location.belowbar, color=colorBullish, size=size.tiny, offset=-swingLen)
+
+// --- LIQUIDITY SWEEP DETECTION ---
+bool bullishSweep = false
+bool bearishSweep = false
+float sweptPrice = na
+float sweepDepth = 0.0
+
+// Check Bullish Sweep (low sweeps a previous Swing Low, but closes above it)
+if array.size(activeLows) > 0 and low < close[1]
+    for i = array.size(activeLows) - 1 to 0
+        float val = array.get(activeLows, i)
+        if low < val and close > val
+            bullishSweep := true
+            sweptPrice := val
+            sweepDepth := val - low
+            array.remove(activeLows, i) // Remove as it has been swept
+            break
+
+// Check Bearish Sweep (high sweeps a previous Swing High, but closes below it)
+if array.size(activeHighs) > 0 and high > close[1]
+    for i = array.size(activeHighs) - 1 to 0
+        float val = array.get(activeHighs, i)
+        if high > val and close < val
+            bearishSweep := true
+            sweptPrice := val
+            sweepDepth := high - val
+            array.remove(activeHighs, i) // Remove as it has been swept
+            break
+
+plotshape(bullishSweep, "Bullish Sweep", shape.labelup, location.belowbar, color.new(colorBullish, 20), text="SWEEP", textcolor=color.white, size=size.small)
+plotshape(bearishSweep, "Bearish Sweep", shape.labeldown, location.abovebar, color.new(colorBearish, 20), text="SWEEP", textcolor=color.white, size=size.small)
+
+// --- MARKET STRUCTURE SHIFT (MSS) ---
+// Save last swing levels for breakout shifts
+var float lastSwingHigh = na
+var float lastSwingLow = na
+
+if not na(pHigh)
+    lastSwingHigh := pHigh
+if not na(pLow)
+    lastSwingLow := pLow
+
+bool bullishMss = false
+bool bearishMss = false
+float mssBreakoutLevel = na
+
+// Bullish MSS: Close breaches above last swing high after a bullish sweep (within 10 bars)
+var int barsSinceBullishSweep = 999
+if bullishSweep
+    barsSinceBullishSweep := 0
+else
+    barsSinceBullishSweep += 1
+
+if barsSinceBullishSweep <= 10 and ta.crossover(close, lastSwingHigh) and not na(lastSwingHigh)
+    bullishMss := true
+    mssBreakoutLevel := lastSwingHigh
+    barsSinceBullishSweep := 999 // reset
+
+// Bearish MSS: Close breaches below last swing low after a bearish sweep (within 10 bars)
+var int barsSinceBearishSweep = 999
+if bearishSweep
+    barsSinceBearishSweep := 0
+else
+    barsSinceBearishSweep += 1
+
+if barsSinceBearishSweep <= 10 and ta.crossunder(close, lastSwingLow) and not na(lastSwingLow)
+    bearishMss := true
+    mssBreakoutLevel := lastSwingLow
+    barsSinceBearishSweep := 999 // reset
+
+plotshape(bullishMss, "Bullish MSS", shape.labelup, location.belowbar, color.new(colorBullish, 0), text="MSS", textcolor=color.white, size=size.small)
+plotshape(bearishMss, "Bearish MSS", shape.labeldown, location.abovebar, color.new(colorBearish, 0), text="MSS", textcolor=color.white, size=size.small)
+
+// --- FAIR VALUE GAPS (FVG) ---
+bool bullishFvg = false
+bool bearishFvg = false
+float fvgSize = 0.0
+float fvgLow = na
+float fvgHigh = na
+
+// FVG is a 3-candle imbalance pattern
+// Bullish: Candle 1 High < Candle 3 Low
+if (high[2] < low) and ((low - high[2]) > (atrVal * fvgMinRatio))
+    bullishFvg := true
+    fvgLow := high[2]
+    fvgHigh := low
+    fvgSize := low - high[2]
+    box.new(left=bar_index-2, top=fvgHigh, right=bar_index, bottom=fvgLow, bgcolor=colorBullishLight, border_color=colorBullish)
+
+// Bearish: Candle 1 Low > Candle 3 High
+if (low[2] > high) and ((low[2] - high) > (atrVal * fvgMinRatio))
+    bearishFvg := true
+    fvgLow := high
+    fvgHigh := low[2]
+    fvgSize := low[2] - high
+    box.new(left=bar_index-2, top=fvgHigh, right=bar_index, bottom=fvgLow, bgcolor=colorBearishLight, border_color=colorBearish)
+
+// --- SIGNAL WEBHOOK PAYLOAD CREATION ---
+bool triggerAlert = (bullishMss and bullishFvg[1]) or (bearishMss and bearishFvg[1]) or (bullishMss and bullishFvg) or (bearishMss and bearishFvg)
+
+if triggerAlert
+    string alertDirection = bullishMss ? "Bullish" : "Bearish"
+    float signalSweepPrice = bullishMss ? lastSwingLow : lastSwingHigh // Level that was swept
+    float signalMssPrice = mssBreakoutLevel
+    float signalTriggerPrice = close
+    
+    // Normalized features
+    float normSweepDepth = na(sweepDepth) ? 0.1 * atrVal : sweepDepth
+    float volSpike = avgVol > 0 ? volume / avgVol : 1.0
+    float mssStr = avgBody > 0 ? math.abs(close - open) / avgBody : 1.0
+    
+    // Constructing JSON String
+    string alertJson = '{' +
+      '"symbol": "' + syminfo.ticker + '", ' +
+      '"timeframe": "' + timeframe.period + '", ' +
+      '"direction": "' + alertDirection + '", ' +
+      '"sweep_price": ' + str.tostring(signalSweepPrice) + ', ' +
+      '"mss_price": ' + str.tostring(signalMssPrice) + ', ' +
+      '"trigger_price": ' + str.tostring(signalTriggerPrice) + ', ' +
+      '"sweep_depth": ' + str.tostring(normSweepDepth) + ', ' +
+      '"atr": ' + str.tostring(atrVal) + ', ' +
+      '"volume_spike": ' + str.tostring(volSpike) + ', ' +
+      '"mss_strength": ' + str.tostring(mssStr) + ', ' +
+      '"trend": "' + trendState + '", ' +
+      '"session": "' + sessionName + '", ' +
+      '"fvg_size": ' + str.tostring(fvgSize) + ', ' +
+      '"fvg_low": ' + str.tostring(fvgLow) + ', ' +
+      '"fvg_high": ' + str.tostring(fvgHigh) +
+      '}'
+      
+    alert(alertJson, alert.freq_once_per_bar)

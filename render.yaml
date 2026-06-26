@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: smart-liquidity-ai
+    env: python
+    buildCommand: pip install -r backend/requirements.txt && python scripts/generate_synthetic_data.py
+    startCommand: python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smart-liquidity-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MODEL_DIR
+        value: ./ml_models
+      - key: MODEL_NAME
+        value: xgboost_setup_classifier.joblib
+      - key: SCALER_NAME
+        value: robust_scaler.joblib
+
+databases:
+  - name: smart-liquidity-db
+    plan: free

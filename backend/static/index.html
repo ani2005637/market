@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Liquidity AI Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Glassmorphic Background Shapes -->
+    <div class="bg-shape bg-shape-1"></div>
+    <div class="bg-shape bg-shape-2"></div>
+    
+    <div class="dashboard-wrapper">
+        <!-- HEADER -->
+        <header class="main-header">
+            <div class="logo-container">
+                <span class="logo-icon">▲</span>
+                <div class="logo-text">
+                    <h1>SMART LIQUIDITY <span>AI</span></h1>
+                    <p class="subtitle">Sanna Innovations MVP</p>
+                </div>
+            </div>
+            
+            <div class="header-status-bar">
+                <div class="status-item" id="server-status">
+                    <span class="status-dot dot-yellow"></span>
+                    <span class="status-label">API: Connecting...</span>
+                </div>
+                <div class="status-item" id="model-status">
+                    <span class="status-dot dot-red"></span>
+                    <span class="status-label">Model: Unloaded</span>
+                </div>
+                <div class="status-item timer-item">
+                    <span class="time-label" id="current-time">11:08:37 UTC</span>
+                </div>
+                <button class="btn btn-auth" id="btn-login-logout">
+                    <span class="btn-text">Admin Login</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- STATS BAR -->
+        <section class="stats-container">
+            <div class="stat-card animate-fade-in">
+                <p class="stat-label">Total Setups</p>
+                <h2 class="stat-value" id="stat-total">0</h2>
+                <div class="stat-meta">Logged signals</div>
+            </div>
+            <div class="stat-card animate-fade-in">
+                <p class="stat-label">Win Rate</p>
+                <h2 class="stat-value text-green" id="stat-winrate">0.0%</h2>
+                <div class="stat-meta">TP Hit ratio</div>
+            </div>
+            <div class="stat-card animate-fade-in">
+                <p class="stat-label">TP / SL</p>
+                <h2 class="stat-value" id="stat-tpsl"><span class="text-green">0</span> <span class="text-divider">/</span> <span class="text-red">0</span></h2>
+                <div class="stat-meta">Completed setups</div>
+            </div>
+            <div class="stat-card animate-fade-in">
+                <p class="stat-label">ML Model Accuracy</p>
+                <h2 class="stat-value text-blue" id="stat-accuracy">0.0%</h2>
+                <div class="stat-meta" id="stat-dataset-size">XGBoost Engine</div>
+            </div>
+        </section>
+
+        <!-- MAIN LAYOUT -->
+        <div class="main-layout-grid">
+            <!-- LEFT PANEL: WEBHOOK SIMULATOR -->
+            <aside class="panel-card simulator-panel animate-fade-in">
+                <div class="panel-header">
+                    <h3>TradingView Webhook Simulator</h3>
+                    <span class="panel-badge badge-blue">TEST</span>
+                </div>
+                <form id="simulator-form" class="panel-body">
+                    <div class="form-row split-3">
+                        <div class="form-group">
+                            <label for="sim-symbol">Symbol</label>
+                            <select id="sim-symbol" required>
+                                <option value="BTCUSD">BTCUSD</option>
+                                <option value="ETHUSD">ETHUSD</option>
+                                <option value="XAUUSD">XAUUSD</option>
+                                <option value="EURUSD">EURUSD</option>
+                                <option value="GBPUSD">GBPUSD</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-timeframe">TF</label>
+                            <select id="sim-timeframe" required>
+                                <option value="5m">5m</option>
+                                <option value="15m" selected>15m</option>
+                                <option value="1h">1h</option>
+                                <option value="4h">4h</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-direction">Direction</label>
+                            <select id="sim-direction" required>
+                                <option value="Bullish" selected>Bullish</option>
+                                <option value="Bearish">Bearish</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row split-2">
+                        <div class="form-group">
+                            <label for="sim-trend">Trend Context</label>
+                            <select id="sim-trend" required>
+                                <option value="Bullish" selected>Bullish (Uptrend)</option>
+                                <option value="Neutral">Neutral (Range)</option>
+                                <option value="Bearish">Bearish (Downtrend)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-session">Trading Session</label>
+                            <select id="sim-session" required>
+                                <option value="Asian">Asian (Low Vol)</option>
+                                <option value="London" selected>London (High Vol)</option>
+                                <option value="New York">New York (High Vol)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row split-2">
+                        <div class="form-group">
+                            <label for="sim-trigger">Trigger Price</label>
+                            <input type="number" id="sim-trigger" step="any" value="65400" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-atr">ATR Value</label>
+                            <input type="number" id="sim-atr" step="any" value="120" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row split-2">
+                        <div class="form-group">
+                            <label for="sim-sweep">Sweep Level</label>
+                            <input type="number" id="sim-sweep" step="any" value="65200" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-mss">MSS Breakout Level</label>
+                            <input type="number" id="sim-mss" step="any" value="65500" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row split-3">
+                        <div class="form-group">
+                            <label for="sim-sweep-depth">Sweep %</label>
+                            <input type="number" id="sim-sweep-depth" step="any" value="0.15" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-volume">Vol Spike</label>
+                            <input type="number" id="sim-volume" step="any" value="1.8" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-mss-str">MSS Body</label>
+                            <input type="number" id="sim-mss-str" step="any" value="1.5" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row split-3">
+                        <div class="form-group">
+                            <label for="sim-fvg-size">FVG Size</label>
+                            <input type="number" id="sim-fvg-size" step="any" value="45">
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-fvg-low">FVG Low</label>
+                            <input type="number" id="sim-fvg-low" step="any" value="65380">
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-fvg-high">FVG High</label>
+                            <input type="number" id="sim-fvg-high" step="any" value="65425">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-block" id="btn-submit-simulate">
+                            <span>Fire Alert Webhook</span>
+                        </button>
+                    </div>
+                </form>
+            </aside>
+
+            <!-- CENTER/RIGHT PANEL: ACTIVE SETUPS & HISTORY -->
+            <main class="panel-card main-setups-panel animate-fade-in">
+                <div class="panel-tabs">
+                    <button class="tab-btn active" data-tab="active-setups-tab">Active & Pending Setups</button>
+                    <button class="tab-btn" data-tab="history-tab">Setup Log & History</button>
+                    <button class="tab-btn" data-tab="model-tab">ML Engine Control</button>
+                </div>
+
+                <!-- TAB 1: ACTIVE SETUPS -->
+                <div class="tab-content active" id="active-setups-tab">
+                    <div class="table-container">
+                        <table class="setups-table" id="table-active-setups">
+                            <thead>
+                                <tr>
+                                    <th>Ticker</th>
+                                    <th>TF</th>
+                                    <th>Type</th>
+                                    <th>Setup Score</th>
+                                    <th>ML Win Prob</th>
+                                    <th>Session</th>
+                                    <th>Trigger Price</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="empty-row">
+                                    <td colspan="9">No active setups found. Use the Webhook Simulator to add some!</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 2: HISTORICAL LOG -->
+                <div class="tab-content" id="history-tab">
+                    <div class="table-container">
+                        <table class="setups-table" id="table-history-setups">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Ticker</th>
+                                    <th>TF</th>
+                                    <th>Type</th>
+                                    <th>Setup Score</th>
+                                    <th>ML Win Prob</th>
+                                    <th>Session</th>
+                                    <th>Status</th>
+                                    <th>Outcome</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="empty-row">
+                                    <td colspan="9">No historical setups recorded yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 3: ML CONTROL PANEL -->
+                <div class="tab-content" id="model-tab">
+                    <div class="model-control-grid">
+                        <div class="model-metrics-details">
+                            <h4>Current Model Configuration</h4>
+                            <div class="details-list">
+                                <div class="detail-row">
+                                    <span class="lbl">Algorithm:</span>
+                                    <span class="val font-mono">XGBoost (XGBClassifier)</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="lbl">Last Trained:</span>
+                                    <span class="val font-mono" id="model-trained-time">Never</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="lbl">Dataset Size:</span>
+                                    <span class="val font-mono" id="model-dataset-val">0 setups</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="lbl">Model Accuracy:</span>
+                                    <span class="val font-mono text-blue" id="model-accuracy-val">0.00%</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="lbl">F1 Score:</span>
+                                    <span class="val font-mono" id="model-f1-val">0.0000</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="lbl">ROC-AUC:</span>
+                                    <span class="val font-mono" id="model-auc-val">0.0000</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="model-actions-card">
+                            <h4>Engine Retraining</h4>
+                            <p class="section-description">
+                                Retraining recalibrates the XGBoost classifier. The model trains on labeled setups (signals marked as TP Hit or SL Hit) to improve predictive accuracy.
+                            </p>
+                            
+                            <div class="training-options">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="chk-include-synthetic" checked>
+                                    <span class="checkmark"></span>
+                                    Include pre-loaded synthetic historical data (recommended for low DB sample size)
+                                </label>
+                            </div>
+
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="btn-retrain" disabled>
+                                    <span>Retrain ML Engine</span>
+                                </button>
+                            </div>
+                            <span class="btn-note text-yellow" id="retrain-auth-warning">Requires Admin Login</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- BOTTOM PANEL: SIDEBAR/DETAIL PANEL -->
+        <section class="panel-card details-drawer animate-fade-in" id="signal-detail-drawer" style="display:none;">
+            <div class="drawer-header">
+                <div class="drawer-title">
+                    <h3 id="detail-symbol">BTCUSD</h3>
+                    <span class="badge badge-green" id="detail-direction">Bullish</span>
+                    <span class="time-label" id="detail-time">15m TF | 2026-06-24 11:08</span>
+                </div>
+                <button class="btn-close-drawer" id="btn-close-detail">&times;</button>
+            </div>
+            <div class="drawer-grid">
+                <div class="drawer-col">
+                    <h4 class="col-title">Price Levels</h4>
+                    <table class="detail-table">
+                        <tr><td>Trigger (Entry)</td><td class="font-mono text-highlight" id="det-price-trigger">65,400.00</td></tr>
+                        <tr><td>Liquidity Sweep</td><td class="font-mono" id="det-price-sweep">65,200.00</td></tr>
+                        <tr><td>MSS Break</td><td class="font-mono" id="det-price-mss">65,500.00</td></tr>
+                    </table>
+                </div>
+                <div class="drawer-col">
+                    <h4 class="col-title">Engineered Features</h4>
+                    <table class="detail-table">
+                        <tr><td>Sweep Depth</td><td class="font-mono" id="det-feat-depth">0.15%</td></tr>
+                        <tr><td>Volume Spike Ratio</td><td class="font-mono" id="det-feat-volume">1.8x</td></tr>
+                        <tr><td>MSS Candlestick Size</td><td class="font-mono" id="det-feat-mss-str">1.5x</td></tr>
+                    </table>
+                </div>
+                <div class="drawer-col">
+                    <h4 class="col-title">FVG Details</h4>
+                    <table class="detail-table">
+                        <tr><td>FVG Size</td><td class="font-mono" id="det-fvg-size">45.0</td></tr>
+                        <tr><td>FVG Low</td><td class="font-mono" id="det-fvg-low">65,380.00</td></tr>
+                        <tr><td>FVG High</td><td class="font-mono" id="det-fvg-high">65,425.00</td></tr>
+                    </table>
+                </div>
+                <div class="drawer-col">
+                    <h4 class="col-title">Market Context</h4>
+                    <table class="detail-table">
+                        <tr><td>Trend State</td><td class="font-mono" id="det-market-trend">Bullish</td></tr>
+                        <tr><td>Trading Session</td><td class="font-mono" id="det-market-session">London</td></tr>
+                        <tr><td>ATR Value</td><td class="font-mono" id="det-market-atr">120.0</td></tr>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ADMIN LOGIN MODAL -->
+    <div class="modal-overlay" id="login-modal" style="display:none;">
+        <div class="modal-content animate-slide-up">
+            <div class="modal-header">
+                <h3>Admin Authentication</h3>
+                <button class="btn-close-modal" id="btn-close-login">&times;</button>
+            </div>
+            <form id="login-form" class="modal-body">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" value="admin" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" value="admin123" required>
+                </div>
+                <div class="error-msg" id="login-error-msg" style="display:none;">Incorrect credentials</div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <span>Authenticate</span>
+                    </button>
+                </div>
+                <p class="modal-hint">Default Dev Credentials: admin / admin123</p>
+            </form>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
